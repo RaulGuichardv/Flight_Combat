@@ -7,10 +7,6 @@ window_width = 800
 window_height = 800
 title = "Flight Combat"
 
-# title_font = ("Kenney Future", 36)
-# default_font = ("Kenney Pixel", 18)
-# score_font = ("Kenney Mini Square", 20)
-
 title_font = "Kenney Future"
 default_font = "Kenney Pixel"
 score_font = "Kenney Mini Square"
@@ -225,7 +221,6 @@ class ScoreView(arcade.View):
             df = pd.read_csv("scores.csv", header=None)
             self.scores = df[0].tolist()
         except FileNotFoundError:
-            print("Archivo 'scores.csv' no encontrado.")
             self.scores = []
 
     def on_show(self):
@@ -243,7 +238,6 @@ class ScoreView(arcade.View):
             y -= 30
             arcade.draw_text(str(score), window_width // 2, y, arcade.color.WHITE, 14, anchor_x="center")
 
-        # Dibujar botón "Volver"
         arcade.draw_rect_filled(arcade.rect.XYWH(window_width // 2, self.button_y + self.BUTTON_HEIGHT // 2,
                                       self.BUTTON_WIDTH, self.BUTTON_HEIGHT), arcade.color.GRAY)
         
@@ -251,10 +245,8 @@ class ScoreView(arcade.View):
                          arcade.color.WHITE, font_size=18, anchor_x="center")
 
     def on_mouse_press(self, x, y, button, modifiers):
-        # Verificar si se hizo clic dentro del área del botón
         if (self.button_x <= x <= self.button_x +  self.BUTTON_WIDTH and
                 self.button_y <= y <= self.button_y + self.BUTTON_HEIGHT):
-            # Volver a la pantalla de GameOver (puedes cambiar el puntaje si es necesario)
             game_over_view = GameOver(self.window, score=self.score)  # 
             self.window.show_view(game_over_view)
 
@@ -271,7 +263,6 @@ class GameOver(arcade.View):
         if self.background:
             arcade.draw_texture_rect(self.background, arcade.rect.XYWH(window_width // 2, window_height // 2, window_width, window_height))
         
-        # Panel semi-transparente
         arcade.draw_rect_filled(arcade.rect.XYWH(window_width // 2, window_height // 2, window_width - 100, window_height - 100),PANEL_COLOR)
         
         arcade.draw_text("GAME OVER", window_width // 2, window_height // 2 + 50,
@@ -551,7 +542,6 @@ if __name__ == "__main__":
     window = arcade.Window(window_width, window_height, title)
     arcade.set_background_color(BACKGROUND_COLOR)
     
-    # Configurar icono de la ventana
     try:
         window.set_icon(arcade.load_texture("imgs/game_icon.png"))
     except:
