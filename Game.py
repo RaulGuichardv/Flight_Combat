@@ -1,0 +1,562 @@
+import arcade
+import random
+import math
+import pandas as pd
+
+window_width = 800
+window_height = 800
+title = "Flight Combat"
+
+# title_font = ("Kenney Future", 36)
+# default_font = ("Kenney Pixel", 18)
+# score_font = ("Kenney Mini Square", 20)
+
+title_font = "Kenney Future"
+default_font = "Kenney Pixel"
+score_font = "Kenney Mini Square"
+
+
+BACKGROUND_COLOR = arcade.color.BLUE_SAPPHIRE
+PANEL_COLOR = (0, 0, 0, 200)
+TEXT_COLOR = arcade.color.WHITE
+ACCENT_COLOR = arcade.color.GOLD
+DANGER_COLOR = arcade.color.RED
+
+keys = {
+    "a": False,
+    "d": False,
+    "w":False,
+    "s":False,
+}
+
+class BulletEnemy():
+    def __init__(self, x, y, target_x, target_y):
+        self.x = x
+        self.y = y - 25
+        self.radius = 5
+        self.speed = 1
+        
+        self.damage = 1
+        self.points = 100
+        
+        self.width = self.radius * 2
+        self.height = self.radius * 2
+        self.bullet_texture = arcade.load_texture("imgs/bala_enemiga.png")
+        
+        self.angle = math.atan2(target_y - y, target_x - x)
+        self.dx = math.cos(self.angle) * self.speed
+        self.dy = math.sin(self.angle) * self.speed
+
+    def calculate_speed(self, lvl):
+        speed_chosee = {
+            "1": 10,
+            "2": 9,
+            "3": 8,
+            "4": 8,
+            "5": 7,
+            "6": 7,
+            "7": 6,
+            "8": 6,
+            "9": 5,
+        }
+        self.speed = speed_chosee[str(lvl)]
+        self.angle = math.atan2(self.dy, self.dx)
+        self.dx = math.cos(self.angle) * self.speed
+        self.dy = math.sin(self.angle) * self.speed
+
+    def move(self):
+        self.x += self.dx
+        self.y += self.dy
+
+    def draw(self):
+        arcade.draw_texture_rect(
+            self.bullet_texture,
+            arcade.rect.XYWH(self.x, self.y, self.width, self.height)
+        )
+
+    def off_screen(self):
+        return self.y < 0 or self.y > window_height or self.x < 0 or self.x > window_width
+
+    def hit(self, player):
+        player_left = player.x - player.width / 2
+        player_right = player.x + player.width / 2
+        player_bottom = player.y - player.height / 2
+        player_top = player.y + player.height / 2
+
+        closest_x = max(player_left, min(self.x, player_right))
+        closest_y = max(player_bottom, min(self.y, player_top))
+
+        distance = math.hypot(self.x - closest_x, self.y - closest_y)
+
+        return distance < self.radius
+
+    
+class Player:
+    def __init__(self):
+        self.x = window_width // 2
+        self.y = 40
+        self.image = arcade.load_texture("imgs/avion_player.png")
+        self.width = 50  
+        self.height = 50
+        self.speed = 6  
+
+        self.lives = 3
+        self.score = 0
+
+    def draw(self):
+        arcade.draw_texture_rect(self.image, arcade.rect.XYWH(self.x, self.y, self.width, self.height))
+
+    def move(self):
+        if keys["a"] and self.x - self.width/2 > 200:
+            self.x -= self.speed 
+        elif keys["d"] and self.x + self.width/2 < 600:
+            self.x += self.speed
+
+        if keys["w"] and window_height > self.y + self.height/2:
+            self.y += self.speed
+        elif keys["s"] and self.y > self.height / 2:
+            self.y -= self.speed
+
+
+class Enemy():
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+        self.width = 50
+        self.height = 50
+        self.speed = 5   
+
+        self.damage = 1
+        self.points = 200
+        
+        self.enemy_texture = arcade.load_texture("imgs/avion_enemy.png")
+
+    def draw(self):
+        arcade.draw_texture_rect(
+            self.enemy_texture,
+            arcade.rect.XYWH(self.x, self.y, self.width, self.height)
+        )
+
+    def move(self):
+        self.y -= self.speed
+
+    def off_screen(self):
+        return self.y < -self.height
+
+    def shoot(self, target_x, target_y):
+        return BulletEnemy(self.x, self.y, target_x, target_y)
+
+    def collision(self, player: Player):
+        enemy_left = self.x - self.width // 2
+        enemy_right = self.x + self.width // 2
+        enemy_top = self.y + self.height // 2
+        enemy_bottom = self.y - self.height // 2
+
+        player_left = player.x - player.width // 2
+        player_right = player.x + player.width // 2
+        player_top = player.y + player.height // 2
+        player_bottom = player.y - player.height // 2
+
+        return not (
+            enemy_right < player_left or
+            enemy_left > player_right or
+            enemy_top < player_bottom or
+            enemy_bottom > player_top
+        )
+
+
+class Bullet:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y + 25
+
+        self.width = 5
+        self.height = 10
+        
+        self.speed = 7
+
+        self.bullet_texture = arcade.load_texture("imgs/bala.png")
+
+    def draw(self):
+        arcade.draw_texture_rect(
+            self.bullet_texture,
+            arcade.rect.XYWH(self.x, self.y, self.width, self.height)
+        )
+
+    def move(self):
+        self.y += self.speed
+
+    def off_screen(self):
+        return self.y > window_height + self.height
+
+    def hit(self, enemy: Enemy):
+        extra = 20
+        enemy_left = enemy.x - extra
+        enemy_right = enemy.x + enemy.width - extra
+        enemy_bottom = enemy.y
+        enemy_top = enemy.y + enemy.height
+
+        bullet_left = self.x
+        bullet_right = self.x + self.width
+        bullet_bottom = self.y
+        bullet_top = self.y + self.height
+
+        return (bullet_right > enemy_left and
+                bullet_left < enemy_right and
+                bullet_top > enemy_bottom and
+                bullet_bottom < enemy_top)
+
+
+class ScoreView(arcade.View):
+    def __init__(self, score):
+        super().__init__()
+        self.scores = []
+        self.score = score
+
+        self.BUTTON_WIDTH  = 200
+        self.BUTTON_HEIGHT = 40
+
+        self.button_x = window_width // 2 -  self.BUTTON_WIDTH // 2
+        self.button_y = 50
+
+    def setup(self):
+        try:
+            df = pd.read_csv("scores.csv", header=None)
+            self.scores = df[0].tolist()
+        except FileNotFoundError:
+            print("Archivo 'scores.csv' no encontrado.")
+            self.scores = []
+
+    def on_show(self):
+        arcade.set_background_color(arcade.color.DARK_BLUE_GRAY)
+
+    def on_draw(self):
+        self.clear()
+        arcade.draw_text("Tabla de Puntajes", window_width // 2, window_height - 50,
+                         arcade.color.WHITE, font_size=24, anchor_x="center")
+
+        y = window_height - 100
+        arcade.draw_text("Puntajes", window_width // 2, y, arcade.color.YELLOW, 16, anchor_x="center")
+
+        for score in self.scores:
+            y -= 30
+            arcade.draw_text(str(score), window_width // 2, y, arcade.color.WHITE, 14, anchor_x="center")
+
+        # Dibujar botón "Volver"
+        arcade.draw_rect_filled(arcade.rect.XYWH(window_width // 2, self.button_y + self.BUTTON_HEIGHT // 2,
+                                      self.BUTTON_WIDTH, self.BUTTON_HEIGHT), arcade.color.GRAY)
+        
+        arcade.draw_text("Volver", window_width // 2, self.button_y + 10,
+                         arcade.color.WHITE, font_size=18, anchor_x="center")
+
+    def on_mouse_press(self, x, y, button, modifiers):
+        # Verificar si se hizo clic dentro del área del botón
+        if (self.button_x <= x <= self.button_x +  self.BUTTON_WIDTH and
+                self.button_y <= y <= self.button_y + self.BUTTON_HEIGHT):
+            # Volver a la pantalla de GameOver (puedes cambiar el puntaje si es necesario)
+            game_over_view = GameOver(self.window, score=self.score)  # 
+            self.window.show_view(game_over_view)
+
+
+class GameOver(arcade.View):
+    def __init__(self, window, score):
+        super().__init__(window)
+        self.background = arcade.load_texture("imgs/game_over_bg.png")
+        self.score = score
+
+    def on_draw(self):
+        self.clear()
+        
+        if self.background:
+            arcade.draw_texture_rect(self.background, arcade.rect.XYWH(window_width // 2, window_height // 2, window_width, window_height))
+        
+        # Panel semi-transparente
+        arcade.draw_rect_filled(arcade.rect.XYWH(window_width // 2, window_height // 2, window_width - 100, window_height - 100),PANEL_COLOR)
+        
+        arcade.draw_text("GAME OVER", window_width // 2, window_height // 2 + 50,
+                         DANGER_COLOR, font_size=48, font_name=title_font, anchor_x="center",
+                         bold=True)
+        
+        arcade.draw_text("Tu puntuación final:", window_width // 2, window_height // 2,
+                         TEXT_COLOR, font_size=24, font_name=default_font, anchor_x="center")
+        
+        arcade.draw_text(f"{self.score}", window_width // 2, window_height // 2 - 40,
+                         ACCENT_COLOR, font_size=36, font_name=score_font, anchor_x="center")
+        
+        arcade.draw_text("Presiona 'R' para Reiniciar", window_width // 2,
+                         window_height // 2 - 100, TEXT_COLOR, font_size=20, 
+                         font_name=default_font, anchor_x="center")
+    
+        arcade.draw_text("Presiona 'Q' para ver los scores", window_width // 2,
+                         window_height // 2 - 140, TEXT_COLOR, font_size=20,
+                         font_name=default_font, anchor_x="center")
+        
+        arcade.draw_text("Presiona 'ESC' para ver los scores", window_width // 2,
+                         window_height // 2 - 180, TEXT_COLOR, font_size=20,
+                         font_name=default_font, anchor_x="center")
+
+    def on_key_release(self, key, modifiers):
+        if key == arcade.key.R:
+            for key in keys:
+                keys[key] = False
+            self.window.show_view(GameView())
+        if key == arcade.key.ESCAPE:
+            arcade.close_window()
+
+        if key == arcade.key.Q:
+            score_view = ScoreView(self.score)
+            score_view.setup()
+            self.window.show_view(score_view)
+
+
+class GameView(arcade.View):
+    def __init__(self):
+        super().__init__()
+        self.background = arcade.load_texture("imgs/mar_bg.png") 
+        
+        self.player = Player()
+        self.enemys_list = []
+        self.bullet_enemy_list = []
+        self.bullet_player_list = []
+
+        self.controll_time_show_enemys = 2
+        self.controll_time_shoot_enemy = 2
+        self.time_show_enemys = 0
+        self.time_shoot_enemy = 0
+
+        self.dead = True
+        self.position_lives = (30, 90, 160)
+        
+        self.lvl = 1
+        self.lvl_up = 3000
+        self.lvl_count = 0
+
+        self.life_texture = arcade.load_texture("imgs/vidas.png")
+        self.life_icon_size = 30
+
+        self.life_positions = []
+        self.update_life_positions()
+
+    def on_draw(self):
+        self.clear()
+        
+        if self.background:
+            arcade.draw_texture_rect(self.background, arcade.rect.XYWH(window_width // 2, window_height // 2, window_width, window_height)
+)
+        else:
+            arcade.set_background_color(BACKGROUND_COLOR)
+        
+        arcade.draw_rect_filled(arcade.rect.XYWH(100, window_height , 200, 180),PANEL_COLOR)
+
+        arcade.draw_rect_filled(arcade.rect.XYWH(700, window_height , 200, 180),PANEL_COLOR)
+        
+        arcade.draw_rect_outline(arcade.rect.XYWH(400, window_height // 2, 400, window_height), arcade.color.WHITE, 2)
+        
+        self.player.draw()
+
+        for bullet_p in self.bullet_player_list:
+            bullet_p.draw()
+
+        for bullet_e in self.bullet_enemy_list:
+            bullet_e.draw()
+
+        for enemy in self.enemys_list:
+            enemy.draw()
+
+        self.draw_score()
+        self.draw_lives()
+        self.draw_lvl()
+        self.draw_times()
+
+    def on_update(self, delta_time):
+        if self.player.lives  <= 0: self.dead_player()
+        if self.player.lives >= 1:
+            self.player.move()
+            
+        self.time_show_enemys += delta_time
+
+        for bullet_p in self.bullet_player_list:
+            bullet_p.move()
+            for enemy in self.enemys_list:
+                if bullet_p.hit(enemy):
+                    self.lvl_count += enemy.points
+                    self.update_lvl()
+                    self.player.score += enemy.points
+                    self.bullet_player_list.remove(bullet_p)
+                    self.enemys_list.remove(enemy)
+                    break
+
+        if self.time_show_enemys >= self.controll_time_show_enemys:
+            x = random.randrange(200 + self.player.width, 600, 150)
+            y = random.randrange(window_height + self.player.height, window_height + 100, 10)
+            self.enemys_list.append(Enemy(x, y))
+            self.time_show_enemys = 0
+
+        for enemy in self.enemys_list:
+            enemy.move()
+            if enemy.collision(self.player) and self.player.lives >= 1:
+                self.player.score -= enemy.points
+                self.player.lives -= enemy.damage
+                self.enemys_list.remove(enemy)
+                self.update_life_positions()
+                self.position_lives = self.position_lives[:self.player.lives]
+
+
+        self.time_shoot_enemy += delta_time
+        if self.time_shoot_enemy >= self.controll_time_shoot_enemy and self.player.lives >= 1:
+            for enemy in self.enemys_list:
+                self.bullet_enemy_list.append(BulletEnemy(enemy.x, enemy.y, self.player.x, self.player.y))
+            self.time_shoot_enemy = 0
+
+        for bullet_e in self.bullet_enemy_list:
+            bullet_e.calculate_speed(self.lvl)
+            bullet_e.move()
+            if bullet_e.hit(self.player) and self.player.lives >= 1:
+                self.player.score -= bullet_e.points 
+                self.player.lives -= bullet_e.damage
+                self.bullet_enemy_list.remove(bullet_e)
+                self.update_life_positions()
+                self.position_lives = self.position_lives[:self.player.lives]
+
+
+        self.bullet_player_list = [bullet for bullet in self.bullet_player_list if not bullet.off_screen()]
+        self.enemys_list = [ene for ene in self.enemys_list if not ene.off_screen()] 
+
+    def on_key_press(self, key, modifiers):
+        if key == arcade.key.A:
+            keys["a"] = True
+        elif key == arcade.key.D:
+            keys["d"] = True
+
+        if key == arcade.key.W:
+            keys["w"] = True
+        elif key == arcade.key.S:
+            keys["s"] = True
+
+    def on_key_release(self, key, modifiers):
+        if key == arcade.key.A:
+            keys["a"] = False
+        elif key == arcade.key.D:
+            keys["d"] = False
+        
+        if key == arcade.key.W:
+            keys["w"] = False
+        elif key == arcade.key.S:
+            keys["s"] = False
+        
+        if key == arcade.key.SPACE and self.player.lives >= 1:
+            bullet = Bullet(self.player.x, self.player.y)
+            self.bullet_player_list.append(bullet)
+
+    def update_life_positions(self):
+        spacing = 40 
+        start_x = 30 
+        self.life_positions = [start_x + i * spacing for i in range(self.player.lives)]
+
+    def draw_lives(self):
+        arcade.draw_text("VIDAS", 30, 770, ACCENT_COLOR, font_size=16, font_name=default_font)
+        for i, x in enumerate(self.life_positions[:self.player.lives]):
+            arcade.draw_texture_rect(self.life_texture, 
+                                   arcade.rect.XYWH(30 + i * 40, 740, 
+                                                   self.life_icon_size, self.life_icon_size))
+
+    def draw_line_sections(self):
+        for x in (200, 600):
+            arcade.draw_line(x, 0, x, window_height, arcade.color.WHITE)
+ 
+    def draw_score(self):
+        arcade.draw_text("PUNTUACIÓN", 650, 770, ACCENT_COLOR, font_size=16, font_name=default_font)
+        arcade.draw_text(f"{self.player.score}", 650, 740, TEXT_COLOR, font_size=24, font_name=score_font)
+
+    def dead_player(self):
+        if self.dead: 
+            self.dead = False
+            self.calculatew_score()
+            self.window.show_view(GameOver(self.window, self.player.score))
+
+    def calculatew_score(self):
+        scores = pd.read_csv("scores.csv")
+        scores = scores.sort_values(by="score", ascending=False)
+
+        if self.player.score > scores["score"].min():
+            min_index = scores["score"].idxmin()
+            scores.loc[min_index, "score"] = self.player.score
+
+        scores = scores.sort_values(by="score", ascending=False)
+        print(scores)
+
+        scores.to_csv("scores.csv", index=False)
+
+    def draw_lvl(self):
+        arcade.draw_text("NIVEL", 650, 690, ACCENT_COLOR, font_size=16, font_name=default_font)
+        arcade.draw_text(f"{self.lvl}", 650, 660, TEXT_COLOR, font_size=24, font_name=score_font)
+
+
+    def update_lvl(self):
+        if self.lvl_count >= self.lvl_up and not self.controll_time_show_enemys <= 0.8:
+            self.controll_time_shoot_enemy -= 0.15
+            self.controll_time_show_enemys -= 0.2
+            self.lvl += 1
+            self.lvl_count = 0
+
+    def draw_times(self):
+        arcade.draw_text("TIEMPO APARICIÓN", 30, 690, ACCENT_COLOR, font_size=12, font_name=default_font)
+        arcade.draw_text(f"{round(self.controll_time_show_enemys, 1)}s", 30, 660, TEXT_COLOR, font_size=18, font_name=default_font)
+        
+        arcade.draw_text("TIEMPO DISPARO", 30, 630, ACCENT_COLOR, font_size=12, font_name=default_font)
+        arcade.draw_text(f"{round(self.controll_time_shoot_enemy, 1)}s", 30, 600, TEXT_COLOR, font_size=18, font_name=default_font)
+
+
+
+class Menu(arcade.View):
+    def __init__(self):
+        super().__init__()
+        self.background = arcade.load_texture("imgs/menu_bg.png")
+        self.logo = arcade.load_texture("imgs/game_logo.png") 
+
+    def on_draw(self):
+        self.clear()
+        if self.background:
+            arcade.draw_texture_rect(self.background, arcade.rect.XYWH(window_width // 2, window_height // 2,  window_width, window_height))
+        else:
+            arcade.set_background_color(BACKGROUND_COLOR)
+        
+        arcade.draw_rect_filled(arcade.rect.XYWH(window_width // 2, window_height // 2, window_width - 200, window_height - 200), PANEL_COLOR)
+        
+        
+        arcade.draw_text("FLIGHT COMBAT", window_width // 2, window_height // 2 + 50,
+                         ACCENT_COLOR, font_size=48, font_name=title_font, 
+                         anchor_x="center", bold=True)
+        
+        arcade.draw_text("Presiona ESPACIO para comenzar", window_width // 2,
+                         window_height // 2 - 50, TEXT_COLOR, font_size=24, 
+                         font_name=default_font, anchor_x="center")
+        
+        arcade.draw_text("Controles: WASD para mover, ESPACIO para disparar", 
+                         window_width // 2, window_height // 2 - 100, 
+                         TEXT_COLOR, font_size=18, font_name=default_font, 
+                         anchor_x="center")
+        
+        arcade.draw_text("© 2023 Ian Valentin - Todos los derechos reservados", 
+                         window_width // 2, 50, 
+                         TEXT_COLOR, font_size=12, font_name=default_font, 
+                         anchor_x="center")
+
+    def on_key_release(self, key, modifiers):
+        if key == arcade.key.SPACE:
+            self.window.show_view(GameView())
+
+if __name__ == "__main__":
+    window = arcade.Window(window_width, window_height, title)
+    arcade.set_background_color(BACKGROUND_COLOR)
+    
+    # Configurar icono de la ventana
+    try:
+        window.set_icon(arcade.load_texture("imgs/game_icon.png"))
+    except:
+        pass
+    
+    menu = Menu()
+    window.show_view(menu)
+    arcade.run()
