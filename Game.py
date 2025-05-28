@@ -11,7 +11,6 @@ title_font = "Kenney Future"
 default_font = "Kenney Pixel"
 score_font = "Kenney Mini Square"
 
-
 BACKGROUND_COLOR = arcade.color.BLUE_SAPPHIRE
 PANEL_COLOR = (0, 0, 0, 200)
 TEXT_COLOR = arcade.color.WHITE
@@ -19,10 +18,10 @@ ACCENT_COLOR = arcade.color.GOLD
 DANGER_COLOR = arcade.color.RED
 
 keys = {
-    "a": False,
-    "d": False,
-    "w":False,
-    "s":False,
+    "LEFT": False,
+    "RIGHT": False,
+    "UP":False,
+    "DOWN":False,
 }
 
 class BulletEnemy():
@@ -103,14 +102,14 @@ class Player:
         arcade.draw_texture_rect(self.image, arcade.rect.XYWH(self.x, self.y, self.width, self.height))
 
     def move(self):
-        if keys["a"] and self.x - self.width/2 > 200:
+        if keys["LEFT"] and self.x - self.width/2 > 200:
             self.x -= self.speed 
-        elif keys["d"] and self.x + self.width/2 < 600:
+        elif keys["RIGHT"] and self.x + self.width/2 < 600:
             self.x += self.speed
 
-        if keys["w"] and window_height > self.y + self.height/2:
+        if keys["UP"] and window_height > self.y + self.height/2:
             self.y += self.speed
-        elif keys["s"] and self.y > self.height / 2:
+        elif keys["DOWN"] and self.y > self.height / 2:
             self.y -= self.speed
 
 
@@ -205,57 +204,80 @@ class Bullet:
 
 
 class ScoreView(arcade.View):
-    def __init__(self, score):
+    def __init__(self, score, player_name):
         super().__init__()
         self.scores = []
         self.score = score
+        self.player_name = player_name
 
-        self.BUTTON_WIDTH  = 200
+        self.BUTTON_WIDTH = 200
         self.BUTTON_HEIGHT = 40
-
-        self.button_x = window_width // 2 -  self.BUTTON_WIDTH // 2
+        self.button_x = window_width // 2 - self.BUTTON_WIDTH // 2
         self.button_y = 50
 
     def setup(self):
         try:
-            df = pd.read_csv("scores.csv", header=None)
-            self.scores = df[0].tolist()
-        except FileNotFoundError:
-            self.scores = []
+            df = pd.read_csv("scores.csv")
+            existing_scores = df.values.tolist()
+        except (FileNotFoundError, pd.errors.EmptyDataError):
+            existing_scores = []
+        
+        score_exists = any(name == self.player_name and score == self.score for name, score in existing_scores)
+        
+        if not score_exists and (len(existing_scores) < 10 or self.score > min([score[1] for score in existing_scores], default=0)):
+            existing_scores.append([self.player_name, self.score])
+        
+        self.scores = sorted(existing_scores, key=lambda x: x[1], reverse=True)[:10]
+        
+        pd.DataFrame(self.scores, columns=["Nombre", "Puntaje"]).to_csv("scores.csv", index=False)
 
     def on_show(self):
         arcade.set_background_color(arcade.color.DARK_BLUE_GRAY)
 
     def on_draw(self):
         self.clear()
-        arcade.draw_text("Tabla de Puntajes", window_width // 2, window_height - 50,
+        arcade.draw_text("TOP 10 PUNTAJES", window_width // 2, window_height - 50,
                          arcade.color.WHITE, font_size=24, anchor_x="center")
 
         y = window_height - 100
-        arcade.draw_text("Puntajes", window_width // 2, y, arcade.color.YELLOW, 16, anchor_x="center")
+        arcade.draw_text("#", window_width // 2 - 200, y, arcade.color.YELLOW, 16, anchor_x="center")
+        arcade.draw_text("Jugador", window_width // 2 - 100, y, arcade.color.YELLOW, 16, anchor_x="center")
+        arcade.draw_text("Puntaje", window_width // 2 + 100, y, arcade.color.YELLOW, 16, anchor_x="center")
 
-        for score in self.scores:
+        for i, (name, score) in enumerate(self.scores):
             y -= 30
-            arcade.draw_text(str(score), window_width // 2, y, arcade.color.WHITE, 14, anchor_x="center")
+            color = ACCENT_COLOR if name == self.player_name and score == self.score else TEXT_COLOR
+            
+            arcade.draw_text(f"{i+1}.", window_width // 2 - 200, y, color, 14, anchor_x="center")
+            arcade.draw_text(name, window_width // 2 - 100, y, color, 14, anchor_x="center")
+            arcade.draw_text(str(score), window_width // 2 + 100, y, color, 14, anchor_x="center")
 
-        arcade.draw_rect_filled(arcade.rect.XYWH(window_width // 2, self.button_y + self.BUTTON_HEIGHT // 2,
-                                      self.BUTTON_WIDTH, self.BUTTON_HEIGHT), arcade.color.GRAY)
-        
+        arcade.draw_rect_filled(
+            arcade.rect.XYWH(window_width // 2, self.button_y + self.BUTTON_HEIGHT // 2,
+                            self.BUTTON_WIDTH, self.BUTTON_HEIGHT),
+            arcade.color.GRAY
+        )
         arcade.draw_text("Volver", window_width // 2, self.button_y + 10,
                          arcade.color.WHITE, font_size=18, anchor_x="center")
 
+        if len(self.scores) == 10 and self.score <= min(score[1] for score in self.scores):
+            arcade.draw_text(f"Tu puntaje de {self.score} no entró en el top 10",
+                           window_width // 2, 120,
+                           DANGER_COLOR, font_size=16, anchor_x="center")
+
     def on_mouse_press(self, x, y, button, modifiers):
-        if (self.button_x <= x <= self.button_x +  self.BUTTON_WIDTH and
+        if (self.button_x <= x <= self.button_x + self.BUTTON_WIDTH and
                 self.button_y <= y <= self.button_y + self.BUTTON_HEIGHT):
-            game_over_view = GameOver(self.window, score=self.score)  # 
+            game_over_view = GameOver(self.window, score=self.score, player_name=self.player_name)
             self.window.show_view(game_over_view)
 
 
 class GameOver(arcade.View):
-    def __init__(self, window, score):
+    def __init__(self, window, score, player_name):
         super().__init__(window)
         self.background = arcade.load_texture("imgs/game_over_bg.png")
         self.score = score
+        self.player_name = player_name
 
     def on_draw(self):
         self.clear()
@@ -269,10 +291,10 @@ class GameOver(arcade.View):
                          DANGER_COLOR, font_size=48, font_name=title_font, anchor_x="center",
                          bold=True)
         
-        arcade.draw_text("Tu puntuación final:", window_width // 2, window_height // 2,
+        arcade.draw_text(f"Jugador: {self.player_name}", window_width // 2, window_height // 2,
                          TEXT_COLOR, font_size=24, font_name=default_font, anchor_x="center")
         
-        arcade.draw_text(f"{self.score}", window_width // 2, window_height // 2 - 40,
+        arcade.draw_text(f"Puntuación: {self.score}", window_width // 2, window_height // 2 - 40,
                          ACCENT_COLOR, font_size=36, font_name=score_font, anchor_x="center")
         
         arcade.draw_text("Presiona 'R' para Reiniciar", window_width // 2,
@@ -283,7 +305,7 @@ class GameOver(arcade.View):
                          window_height // 2 - 140, TEXT_COLOR, font_size=20,
                          font_name=default_font, anchor_x="center")
         
-        arcade.draw_text("Presiona 'ESC' para ver los scores", window_width // 2,
+        arcade.draw_text("Presiona 'ESC' para salir", window_width // 2,
                          window_height // 2 - 180, TEXT_COLOR, font_size=20,
                          font_name=default_font, anchor_x="center")
 
@@ -291,20 +313,20 @@ class GameOver(arcade.View):
         if key == arcade.key.R:
             for key in keys:
                 keys[key] = False
-            self.window.show_view(GameView())
-        if key == arcade.key.ESCAPE:
+            self.window.show_view(GameView(self.player_name))
+        elif key == arcade.key.ESCAPE:
             arcade.close_window()
-
-        if key == arcade.key.Q:
-            score_view = ScoreView(self.score)
+        elif key == arcade.key.Q:
+            score_view = ScoreView(self.score, self.player_name)
             score_view.setup()
             self.window.show_view(score_view)
 
 
 class GameView(arcade.View):
-    def __init__(self):
+    def __init__(self, player_name="Jugador"):
         super().__init__()
         self.background = arcade.load_texture("imgs/mar_bg.png") 
+        self.player_name = player_name
         
         self.player = Player()
         self.enemys_list = []
@@ -328,6 +350,16 @@ class GameView(arcade.View):
 
         self.life_positions = []
         self.update_life_positions()
+
+        self.music_tracks = [
+            arcade.load_sound("musica_de_fondo_1.mp3", streaming=True),
+            arcade.load_sound("musica_de_fondo_2.mp3", streaming=True)
+        ]
+        self.current_track_index = 0
+        self.music_player = None 
+
+        self.efect_bullet = arcade.load_sound("gunshot_smg_shot_1-203471.mp3")
+        self.efect_destroy_enemys = arcade.load_sound("electronic-element-burn-spark-1-248606.mp3")
 
     def on_draw(self):
         self.clear()
@@ -371,6 +403,7 @@ class GameView(arcade.View):
             bullet_p.move()
             for enemy in self.enemys_list:
                 if bullet_p.hit(enemy):
+                    arcade.play_sound(self.efect_destroy_enemys)
                     self.lvl_count += enemy.points
                     self.update_lvl()
                     self.player.score += enemy.points
@@ -414,31 +447,50 @@ class GameView(arcade.View):
         self.bullet_player_list = [bullet for bullet in self.bullet_player_list if not bullet.off_screen()]
         self.enemys_list = [ene for ene in self.enemys_list if not ene.off_screen()] 
 
-    def on_key_press(self, key, modifiers):
-        if key == arcade.key.A:
-            keys["a"] = True
-        elif key == arcade.key.D:
-            keys["d"] = True
+        if not self.music_player or not self.music_player.playing:
+            self.current_track_index = (self.current_track_index + 1) % len(self.music_tracks)
+            next_track = self.music_tracks[self.current_track_index]
+            self.music_player = next_track.play(volume=0.5)
 
-        if key == arcade.key.W:
-            keys["w"] = True
-        elif key == arcade.key.S:
-            keys["s"] = True
+    def on_hide_view(self):
+        if self.music_player:
+            self.music_player.pause()
+
+    def on_key_press(self, key, modifiers):
+        if key == arcade.key.LEFT:
+            keys["LEFT"] = True
+        elif key == arcade.key.RIGHT:
+            keys["RIGHT"] = True
+
+        if key == arcade.key.UP:
+            keys["UP"] = True
+        elif key == arcade.key.DOWN:
+            keys["DOWN"] = True
+
+        if key == arcade.key.M:
+            if self.music_player.playing:
+                self.music_player.pause()
+            else:
+                self.music_player.play()
 
     def on_key_release(self, key, modifiers):
-        if key == arcade.key.A:
-            keys["a"] = False
-        elif key == arcade.key.D:
-            keys["d"] = False
+        if key == arcade.key.LEFT:
+            keys["LEFT"] = False
+        elif key == arcade.key.RIGHT:
+            keys["RIGHT"] = False
         
-        if key == arcade.key.W:
-            keys["w"] = False
-        elif key == arcade.key.S:
-            keys["s"] = False
+        if key == arcade.key.UP:
+            keys["UP"] = False
+        elif key == arcade.key.DOWN:
+            keys["DOWN"] = False
         
         if key == arcade.key.SPACE and self.player.lives >= 1:
-            bullet = Bullet(self.player.x, self.player.y)
-            self.bullet_player_list.append(bullet)
+            if len(self.bullet_player_list) < 6:
+                bullet = Bullet(self.player.x, self.player.y)
+                self.bullet_player_list.append(bullet)
+                arcade.play_sound(self.efect_bullet)
+            else:
+                pass
 
     def update_life_positions(self):
         spacing = 40 
@@ -463,21 +515,19 @@ class GameView(arcade.View):
     def dead_player(self):
         if self.dead: 
             self.dead = False
-            self.calculatew_score()
-            self.window.show_view(GameOver(self.window, self.player.score))
+            self.window.show_view(GameOver(self.window, self.player.score, self.player_name))
 
     def calculatew_score(self):
-        scores = pd.read_csv("scores.csv")
-        scores = scores.sort_values(by="score", ascending=False)
-
-        if self.player.score > scores["score"].min():
-            min_index = scores["score"].idxmin()
-            scores.loc[min_index, "score"] = self.player.score
-
-        scores = scores.sort_values(by="score", ascending=False)
-        print(scores)
-
-        scores.to_csv("scores.csv", index=False)
+        try:
+            df = pd.read_csv("scores.csv")
+        except FileNotFoundError:
+            df = pd.DataFrame(columns=["Nombre", "Puntaje"])
+        
+        new_score = pd.DataFrame([[self.player_name, self.player.score]], columns=["Nombre", "Puntaje"])
+        df = pd.concat([df, new_score], ignore_index=True)
+        
+        df = df.sort_values("Puntaje", ascending=False).head(10)
+        df.to_csv("scores.csv", index=False)
 
     def draw_lvl(self):
         arcade.draw_text("NIVEL", 650, 690, ACCENT_COLOR, font_size=16, font_name=default_font)
@@ -499,44 +549,85 @@ class GameView(arcade.View):
         arcade.draw_text(f"{round(self.controll_time_shoot_enemy, 1)}s", 30, 600, TEXT_COLOR, font_size=18, font_name=default_font)
 
 
-
 class Menu(arcade.View):
     def __init__(self):
         super().__init__()
         self.background = arcade.load_texture("imgs/menu_bg.png")
         self.logo = arcade.load_texture("imgs/game_logo.png") 
+        self.player_name = ""
+        self.asking_name = True
+        self.name_prompt = "Ingresa tu nombre:"
+        self.error_message = ""
 
     def on_draw(self):
         self.clear()
         if self.background:
-            arcade.draw_texture_rect(self.background, arcade.rect.XYWH(window_width // 2, window_height // 2,  window_width, window_height))
+            arcade.draw_texture_rect(self.background, arcade.rect.XYWH(window_width // 2, window_height // 2, window_width, window_height))
         else:
             arcade.set_background_color(BACKGROUND_COLOR)
         
         arcade.draw_rect_filled(arcade.rect.XYWH(window_width // 2, window_height // 2, window_width - 200, window_height - 200), PANEL_COLOR)
         
-        
-        arcade.draw_text("FLIGHT COMBAT", window_width // 2, window_height // 2 + 50,
-                         ACCENT_COLOR, font_size=48, font_name=title_font, 
-                         anchor_x="center", bold=True)
-        
-        arcade.draw_text("Presiona ESPACIO para comenzar", window_width // 2,
-                         window_height // 2 - 50, TEXT_COLOR, font_size=24, 
-                         font_name=default_font, anchor_x="center")
-        
-        arcade.draw_text("Controles: WASD para mover, ESPACIO para disparar", 
-                         window_width // 2, window_height // 2 - 100, 
-                         TEXT_COLOR, font_size=18, font_name=default_font, 
-                         anchor_x="center")
-        
-        arcade.draw_text("© 2023 Ian Valentin - Todos los derechos reservados", 
-                         window_width // 2, 50, 
-                         TEXT_COLOR, font_size=12, font_name=default_font, 
-                         anchor_x="center")
+        if self.asking_name:
+            arcade.draw_text("FLIGHT COMBAT", window_width // 2, window_height // 2 + 100,
+                             ACCENT_COLOR, font_size=48, font_name=title_font, 
+                             anchor_x="center", bold=True)
+            
+            arcade.draw_text(self.name_prompt, window_width // 2,
+                             window_height // 2 + 30, TEXT_COLOR, font_size=24, 
+                             font_name=default_font, anchor_x="center")
+            
+            arcade.draw_text(self.player_name, window_width // 2,
+                             window_height // 2 - 10, TEXT_COLOR, font_size=24, 
+                             font_name=default_font, anchor_x="center")
+            
+            if self.error_message:
+                arcade.draw_text(self.error_message, window_width // 2,
+                                 window_height // 2 - 50, DANGER_COLOR, font_size=18, 
+                                 font_name=default_font, anchor_x="center")
+                
+            arcade.draw_text("Presiona ENTER para continuar", window_width // 2,
+                             window_height // 2 - 100, TEXT_COLOR, font_size=20, 
+                             font_name=default_font, anchor_x="center")
+        else:
+            arcade.draw_text("FLIGHT COMBAT", window_width // 2, window_height // 2 + 50,
+                             ACCENT_COLOR, font_size=48, font_name=title_font, 
+                             anchor_x="center", bold=True)
+            
+            arcade.draw_text(f"Jugador: {self.player_name}", window_width // 2,
+                             window_height // 2, TEXT_COLOR, font_size=24, 
+                             font_name=default_font, anchor_x="center")
+            
+            arcade.draw_text("Presiona E para comenzar", window_width // 2,
+                             window_height // 2 - 50, TEXT_COLOR, font_size=24, 
+                             font_name=default_font, anchor_x="center")
+            
+            arcade.draw_text("Controles: Flechas para mover, ESPACIO para disparar", 
+                             window_width // 2, window_height // 2 - 100, 
+                             TEXT_COLOR, font_size=18, font_name=default_font, 
+                             anchor_x="center")
+
+    def on_key_press(self, key, modifiers):
+        if self.asking_name:
+            if key == arcade.key.BACKSPACE:
+                self.player_name = self.player_name[:-1]
+            elif key == arcade.key.ENTER:
+                if len(self.player_name.strip()) > 0:
+                    self.asking_name = False
+                    self.error_message = ""
+                else:
+                    self.error_message = "El nombre no puede estar vacío"
+        else:
+            if key == arcade.key.E:
+                self.window.show_view(GameView(self.player_name))
 
     def on_key_release(self, key, modifiers):
-        if key == arcade.key.SPACE:
-            self.window.show_view(GameView())
+        pass
+
+    def on_text(self, text):
+        if self.asking_name:
+            if text.isalnum() or text == ' ':
+                self.player_name += text
 
 if __name__ == "__main__":
     window = arcade.Window(window_width, window_height, title)
