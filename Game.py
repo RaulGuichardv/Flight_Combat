@@ -4,7 +4,7 @@ import math
 import pandas as pd
 
 window_width = 800
-window_height = 800
+window_height = 700
 title = "Flight Combat"
 
 title_font = "Kenney Future"
@@ -351,12 +351,8 @@ class GameView(arcade.View):
         self.life_positions = []
         self.update_life_positions()
 
-        self.music_tracks = [
-            arcade.load_sound("musica_de_fondo_1.mp3", streaming=True),
-            arcade.load_sound("musica_de_fondo_2.mp3", streaming=True)
-        ]
-        self.current_track_index = 0
-        self.music_player = None 
+        self.background_music = arcade.load_sound("musica_de_fondo_1.mp3", streaming=True)
+        self.music_player = None  
 
         self.efect_bullet = arcade.load_sound("gunshot_smg_shot_1-203471.mp3")
         self.efect_destroy_enemys = arcade.load_sound("electronic-element-burn-spark-1-248606.mp3")
@@ -364,6 +360,9 @@ class GameView(arcade.View):
     def on_draw(self):
         self.clear()
         
+        if not self.music_player or not self.music_player.playing:
+            self.music_player = arcade.play_sound(self.background_music, volume=0.5, loop=True)
+
         if self.background:
             arcade.draw_texture_rect(self.background, arcade.rect.XYWH(window_width // 2, window_height // 2, window_width, window_height)
 )
@@ -447,11 +446,6 @@ class GameView(arcade.View):
         self.bullet_player_list = [bullet for bullet in self.bullet_player_list if not bullet.off_screen()]
         self.enemys_list = [ene for ene in self.enemys_list if not ene.off_screen()] 
 
-        if not self.music_player or not self.music_player.playing:
-            self.current_track_index = (self.current_track_index + 1) % len(self.music_tracks)
-            next_track = self.music_tracks[self.current_track_index]
-            self.music_player = next_track.play(volume=0.5)
-
     def on_hide_view(self):
         if self.music_player:
             self.music_player.pause()
@@ -498,19 +492,28 @@ class GameView(arcade.View):
         self.life_positions = [start_x + i * spacing for i in range(self.player.lives)]
 
     def draw_lives(self):
-        arcade.draw_text("VIDAS", 30, 770, ACCENT_COLOR, font_size=16, font_name=default_font)
-        for i, x in enumerate(self.life_positions[:self.player.lives]):
-            arcade.draw_texture_rect(self.life_texture, 
-                                   arcade.rect.XYWH(30 + i * 40, 740, 
-                                                   self.life_icon_size, self.life_icon_size))
+        x_base = int(self.window.width * 0.03)  
+        y_text = int(self.window.height * 0.95)  
+        y_icons = int(self.window.height * 0.91)
+
+        arcade.draw_text("VIDAS", x_base, y_text, ACCENT_COLOR, font_size=16, font_name=default_font)
+        for i, _ in enumerate(self.life_positions[:self.player.lives]):
+            arcade.draw_texture_rect(
+                self.life_texture,
+                arcade.rect.XYWH(x_base + i * 40, y_icons, self.life_icon_size, self.life_icon_size)
+            )
 
     def draw_line_sections(self):
         for x in (200, 600):
             arcade.draw_line(x, 0, x, window_height, arcade.color.WHITE)
  
     def draw_score(self):
-        arcade.draw_text("PUNTUACIÓN", 650, 770, ACCENT_COLOR, font_size=16, font_name=default_font)
-        arcade.draw_text(f"{self.player.score}", 650, 740, TEXT_COLOR, font_size=24, font_name=score_font)
+        x = int(self.window.width * 0.82)  
+        y_label = int(self.window.height * 0.95)  
+        y_value = int(self.window.height * 0.90)  
+
+        arcade.draw_text("PUNTUACIÓN", x, y_label, ACCENT_COLOR, font_size=16, font_name=default_font)
+        arcade.draw_text(f"{self.player.score}", x, y_value, TEXT_COLOR, font_size=24, font_name=score_font)
 
     def dead_player(self):
         if self.dead: 
@@ -530,9 +533,12 @@ class GameView(arcade.View):
         df.to_csv("scores.csv", index=False)
 
     def draw_lvl(self):
-        arcade.draw_text("NIVEL", 650, 690, ACCENT_COLOR, font_size=16, font_name=default_font)
-        arcade.draw_text(f"{self.lvl}", 650, 660, TEXT_COLOR, font_size=24, font_name=score_font)
+        x = int(self.window.width * 0.82)
+        y_label = int(self.window.height * 0.80)
+        y_value = int(self.window.height * 0.75)
 
+        arcade.draw_text("NIVEL", x, y_label, ACCENT_COLOR, font_size=16, font_name=default_font)
+        arcade.draw_text(f"{self.lvl}", x, y_value, TEXT_COLOR, font_size=24, font_name=score_font)
 
     def update_lvl(self):
         if self.lvl_count >= self.lvl_up and not self.controll_time_show_enemys <= 0.8:
@@ -542,11 +548,18 @@ class GameView(arcade.View):
             self.lvl_count = 0
 
     def draw_times(self):
-        arcade.draw_text("TIEMPO APARICIÓN", 30, 690, ACCENT_COLOR, font_size=12, font_name=default_font)
-        arcade.draw_text(f"{round(self.controll_time_show_enemys, 1)}s", 30, 660, TEXT_COLOR, font_size=18, font_name=default_font)
-        
-        arcade.draw_text("TIEMPO DISPARO", 30, 630, ACCENT_COLOR, font_size=12, font_name=default_font)
-        arcade.draw_text(f"{round(self.controll_time_shoot_enemy, 1)}s", 30, 600, TEXT_COLOR, font_size=18, font_name=default_font)
+        x = int(self.window.width * 0.03)
+        y_label1 = int(self.window.height * 0.82)
+        y_value1 = int(self.window.height * 0.77)
+
+        y_label2 = int(self.window.height * 0.74)
+        y_value2 = int(self.window.height * 0.69)
+
+        arcade.draw_text("TIEMPO APARICIÓN", x, y_label1, ACCENT_COLOR, font_size=12, font_name=default_font)
+        arcade.draw_text(f"{round(self.controll_time_show_enemys, 1)}s", x, y_value1, TEXT_COLOR, font_size=18, font_name=default_font)
+
+        arcade.draw_text("TIEMPO DISPARO", x, y_label2, ACCENT_COLOR, font_size=12, font_name=default_font)
+        arcade.draw_text(f"{round(self.controll_time_shoot_enemy, 1)}s", x, y_value2, TEXT_COLOR, font_size=18, font_name=default_font)
 
 
 class Menu(arcade.View):
@@ -606,6 +619,7 @@ class Menu(arcade.View):
                              window_width // 2, window_height // 2 - 100, 
                              TEXT_COLOR, font_size=18, font_name=default_font, 
                              anchor_x="center")
+        
 
     def on_key_press(self, key, modifiers):
         if self.asking_name:
